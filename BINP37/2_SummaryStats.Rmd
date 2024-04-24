@@ -1,0 +1,274 @@
+---
+title: "2_SummaryStats"
+output: pdf_document
+date: "2024-04-03"
+description: Use this Rscript to load tables with information on known alternative splicing events and percent spliced in (PSI) scores from each event for all 3,455 tumor samples. Once loaded, all non-numeric PSI scores are converted to NA and removed before mean PSI scores are calculated for each AS event. Since all exons are treated as cassette exons and all introns as intron retentions, there will be cases where we have a PSI score of 0 or 1, so we remove these events as they are not likely to be abnormal alternative splicing events. The distribution of the remaining mean PSI scores is visualized as both a frequency polygon and a histogram. Finally, a summary of crucial tumor data, including information on molecular subtype, ER and PR status is generated based on patient data obtained from the SCAN-B project. 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Install necessary packages 
+#install.packages("data.table")
+#install.packages("tidyr")
+#install.packages("reshape2")
+#install.packages("readxl")
+#install.packages("hrbrthemes")
+library(reshape2)
+library(data.table)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(readxl)
+library(hrbrthemes)
+```
+
+## Load Table of Known Alternative Splicing Events 
+```{r}
+# Get a list of AS_Event file names in the directory
+file_list_AS <- list.files("/Users/alexaburchak/Desktop/Academics/Spring_24/BINP37/AS_Events/", pattern = ".tsv", full.names = TRUE)
+
+# Loop through each file and read it into a list
+data_list_AS <- lapply(file_list_AS, function(file) {
+  read.table(file, header = TRUE)
+})
+
+# Combine all the data frames into a single data frame 
+AS_events <- do.call(rbind, data_list_AS)
+
+# Count number of splicing events  
+AS_events %>%
+  group_by(AS_Type) %>%
+  count()
+```
+
+## Load PSI Scores 
+```{r}
+# Get a list of PSI file names in the directory
+file_list_PSI <- list.files("/Users/alexaburchak/Desktop/Academics/Spring_24/BINP37/PSI_Tables/", pattern = ".tsv", full.names = TRUE)
+
+# Loop through each file and read it into a list
+data_list_PSI <- lapply(file_list_PSI, function(file) {
+  read.table(file, header = TRUE)
+})
+
+# Combine all the data frames into a single data frame: 
+# Check the number of columns in each data frame
+num_cols <- sapply(data_list_PSI, function(df) ncol(df))
+
+# Identify which files have only 3455 vs 3456 columns
+files_with_3455_cols <- which(num_cols == 3455)
+files_with_3456_cols <- which(num_cols == 3456)
+
+# Create lists of file names with 3455 vs 3456 columns
+missing_sample <- list()
+not_missing_sample <- list()
+
+for (index in files_with_3455_cols) {
+  missing_sample <- c(missing_sample, file_list_PSI[index])
+}
+
+for (index in files_with_3456_cols) {
+  not_missing_sample <- c(not_missing_sample, file_list_PSI[index])
+}
+
+# Make dataframe with 3455 columns
+missing_sample_PSI <- lapply(missing_sample, function(file) {
+  read.table(file, header = TRUE)
+})
+missing_PSI_scores <- do.call(rbind, missing_sample_PSI)
+
+# Make dataframe with 3456 columns
+not_missing_sample_PSI <- lapply(not_missing_sample, function(file) {
+  read.table(file, header = TRUE)
+})
+not_missing_PSI_scores <- do.call(rbind, not_missing_sample_PSI)
+
+# Get column names of both datasets
+col_names_missing <- colnames(missing_PSI_scores)
+col_names_not_missing <- colnames(not_missing_PSI_scores)
+
+# Find the column missing from missing_PSI_scores
+missing_column <- setdiff(col_names_not_missing, col_names_missing)
+
+# Missing column is sample 238. Mirjam said genotpying failed for this sample (not sure why yet), but that this could be why I am missing some scores. 
+
+# Remove the column "S000238" from not_missing_PSI_scores
+not_missing_PSI_scores_clean <- not_missing_PSI_scores[, !(colnames(not_missing_PSI_scores) %in% "S000238")]
+
+# Combine not_missing_PSI_scores_clean with missing_PSI_scores
+PSI_scores <- rbind(missing_PSI_scores, not_missing_PSI_scores_clean)
+
+# Separate Event column 
+PSI_scores <- separate(PSI_scores,
+                       Event,
+                       into = c("AS_Type", "Location"),
+                       sep = "_",
+                       extra = "merge")
+
+# Add gene symbols to PSI scores table 
+gene_names <- AS_events %>%
+  select(Location, Gene_Name)
+PSI_scores <- left_join(gene_names, PSI_scores, by = "Location")
+
+PSI_scores %>%
+  group_by(Gene_Name) %>%
+  count() #486 genes 
+
+```
+
+## Calculation of Mean PSI Scores
+
+```{r}
+# Define a function to convert non-numeric values to NA
+convert_to_na <- function(x) {
+  ifelse(is.na(as.numeric(x)) | is.nan(as.numeric(x)), NA, x)
+}
+
+# Calculate mean PSI scores across all sample columns
+PSI_mean_scores <- PSI_scores %>%
+  mutate(across(S000001:S006786, convert_to_na)) %>% # Convert non-numeric values to NA
+  mutate(across(S000001:S006786, as.numeric)) %>%  # Convert columns to numeric
+  mutate(mean = round(rowMeans(select(., S000001:S006786), na.rm = TRUE), 4)) %>% 
+  select(Location, Gene_Name, AS_Type, mean) %>% # Remove individual sample columns
+  filter(mean != "NaN") # Delete rows where all sample psi scores were NA (402 rows)
+
+# Remove scores of 0 and 1 
+# We treat every exon as a cassette exon and every intron as intron retention
+# this leaves us with 16062 events from 482 genes 
+PSI_strict <- PSI_mean_scores %>%
+  filter(mean != 0) %>%
+  filter(mean != 1) 
+
+```
+
+## Frequency Polygons 
+```{r}
+PSI_strict %>%
+  filter(AS_Type == "AA" | AS_Type == "AD") %>%
+  ggplot(aes(x = mean)) +
+  geom_freqpoly() +  
+  #coord_flip() +    # Flip axes for better readability
+  theme_minimal() + 
+  labs(x = "Mean PSI Score", y = "Events") + 
+  facet_wrap(vars(AS_Type)) +
+  ggtitle("Distribution of PSI Scores")  
+
+PSI_strict %>%
+  filter(AS_Type == "CE" | AS_Type == "IR") %>%
+  ggplot(aes(x = mean)) +
+  geom_freqpoly() +  
+  #coord_flip() +    # Flip axes for better readability
+  theme_minimal() + 
+  labs(x = "Mean PSI Score", y = "Events") + 
+  facet_wrap(vars(AS_Type)) +
+  ggtitle("Distribution of PSI Scores") 
+```
+
+## Histograms 
+```{r}
+# Plot 1
+plot1 <- PSI_strict %>%
+  filter(AS_Type == "CE" | AS_Type == "IR") %>%
+  ggplot(aes(x=mean, fill=AS_Type)) +
+  geom_histogram(bins = 5, color="#e9ecef", alpha=0.6) +
+  scale_fill_manual(values=c("maroon", "#2d543d")) +
+  theme_ipsum() +
+  facet_wrap(vars(AS_Type))+
+  labs(fill="", 
+       x = "Mean PSI Score",
+       y = "Frequency",
+       title = "Distribution of Mean PSI Scores")
+
+PSI_mean_scores %>%
+  filter(AS_Type == "CE" | AS_Type == "IR") %>%
+  ggplot(aes(x=mean, fill=AS_Type)) +
+  geom_histogram(bins = 5, color="#e9ecef", alpha=0.6) +
+  scale_fill_manual(values=c("maroon", "#2d543d")) +
+  #scale_y_continuous(trans = "log10")+
+  theme_ipsum() +
+  facet_wrap(vars(AS_Type))+
+  labs(fill="", 
+       x = "Mean PSI Score",
+       y = "Frequency",
+       title = "Distribution of Mean PSI Scores")
+
+# Save plot 1 as PDF
+ggsave("CEvIR_distribution.pdf", plot = plot1, device = "pdf")
+
+# Plot 2
+plot2 <- PSI_strict %>%
+  filter(AS_Type == "AA" | AS_Type == "AD") %>%
+  ggplot( aes(x=mean, fill=AS_Type)) +
+  geom_histogram(bins = 5, color="#e9ecef", alpha=0.6) +
+  scale_fill_manual(values=c("#75b8d1", "#c9d175")) +
+  theme_ipsum() +
+  facet_wrap(vars(AS_Type))+
+  labs(fill="", 
+       x = "Mean PSI Score",
+       y = "Frequency",
+       title = "Distribution of Mean PSI Scores")
+
+PSI_mean_scores %>%
+  filter(AS_Type == "AA" | AS_Type == "AD") %>%
+  ggplot(aes(x=mean, fill=AS_Type)) +
+  geom_histogram(bins = 5, color="#e9ecef", alpha=0.6) +
+  scale_fill_manual(values=c("#75b8d1", "#c9d175")) +
+  #scale_y_continuous(trans = "log10")+
+  theme_ipsum() +
+  facet_wrap(vars(AS_Type))+
+  labs(fill="", 
+       x = "Mean PSI Score",
+       y = "Frequency",
+       title = "Distribution of Mean PSI Scores")
+
+# Save plot 2 as PDF
+ggsave("AAvAD_distribution.pdf", plot = plot2, device = "pdf")
+
+```
+
+## Summary Statistics of Patient Data 
+```{r}
+# Load patient data 
+raw_patient_data <- read_excel("/Users/alexaburchak/Desktop/Academics/Spring_24/BINP37/41523_2022_465_MOESM2_ESM.xlsx")
+patient_data <- select(raw_patient_data, -c(2,3,4,5,6,7,8,10,11,
+                                            12,13,14,15,16,17,18,19,20,
+                                            21,22,23,24,25,26,27,28,29,30,
+                                            31,32,33,34,35,50,51,52,65,66,
+                                            67,68,69,70,71,72,73,74,75,76,
+                                            77,78,79,80,81,82,83,84,85,86,87))
+
+# save a list of all sample names
+sample_ids <- colnames(PSI_scores)[4:3458]
+
+# extract only columns from relevant samples 
+filtered_patient_data <- patient_data[patient_data$Sample %in% sample_ids, ]
+
+# Keep only the first instance of each sample
+filtered_patient_data <- filtered_patient_data[!duplicated(filtered_patient_data$Sample), ]
+
+# ER + vs -
+filtered_patient_data %>%
+  group_by(ER) %>%
+  count()
+
+# PR + vs -
+filtered_patient_data %>%
+  group_by(PR) %>%
+  count()
+
+# HER2 + vs - 
+filtered_patient_data %>%
+  group_by(HER2) %>%
+  count()
+
+# Molecular Subtypes 
+filtered_patient_data %>%
+  group_by(NCN.PAM50) %>%
+  count()
+
+# Patient age 
+filtered_patient_data %>%
+  group_by(`Age (5-year range, e.g., 35(31-35), 40(36-40), 45(41-45) etc.)`) %>%
+  count()
+```
