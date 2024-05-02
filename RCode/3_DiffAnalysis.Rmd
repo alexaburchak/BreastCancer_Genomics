@@ -1,0 +1,569 @@
+---
+title: "3_DiffAnalysis"
+output: pdf_document
+date: "2024-04-08"
+description: ADD 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Install necessary packages
+install.packages("data.table")
+install.packages("dplyr")
+library(data.table)
+library(dplyr)
+```
+## Determine PSI Variation Between Samples 
+
+```{r}
+# Convert and remove rows with NaN/NAN values
+converted_PSI_scores <- PSI_scores %>%
+  # Convert non-numeric values to NA
+  mutate(across(S000001:S006786, convert_to_na)) %>% 
+  mutate(across(S000001:S006786, as.numeric)) %>%
+  # Calculate the number of NA values in each row
+  mutate(num_na = rowSums(is.na(select(., -Location, -Gene_Name, -AS_Type)))) 
+
+mean(converted_PSI_scores$num_na)
+
+# 21159 -> 12689
+converted_PSI_scores <- converted_PSI_scores %>%
+  # Conditionally remove rows with 1217 (mean) or more NA's
+  filter(num_na < 1217 | is.na(num_na)) %>%
+  select(-num_na)  # Remove the num_na column if no longer needed
+
+# Define the column range to be checked
+column_range <- 4:ncol(converted_PSI_scores) 
+
+```
+
+## Remove Samples With No Variation
+
+```{r}
+# Remove rows where all values are the same (0,1 or any constant):
+filtered_PSI_scores <- converted_PSI_scores[apply(converted_PSI_scores[, column_range], 1, function(row) length(unique(na.omit(row))) > 1), ] #removed 945 rows, left with 11744 events and 418 genes  
+
+# Melt remaining PSI scores:  
+melted_PSI_scores <- melt(filtered_PSI_scores, na.rm = F, id.vars = c("Location", "Gene_Name", "AS_Type"), variable.name = "Sample", value.name = "PSI_Score")
+
+# Filter out PSI scores of 0 and 1
+melted_strict <- melted_PSI_scores %>%
+  filter(PSI_Score != 0 & PSI_Score != 1)
+
+# Determine how many genes we are left with for analysis 
+melted_strict %>%
+  group_by(Gene_Name) %>%
+  count() # 418 genes from 11,742 events 
+
+```
+
+## Combine PSI Score and Patient Datasets
+
+```{r}
+# Extract ER, PR, and HER2 status and Subtype 
+ER_PR_HER2_status <- filtered_patient_data %>%
+  select(Sample, ER, PR, HER2, NCN.PAM50) %>%
+  rename(NCN_PAM50 = NCN.PAM50)
+
+# Count NAs to be excluded from analysis! 
+ER_PR_HER2_status %>%
+  filter(is.na(ER)) %>% # 17 
+  count()
+
+ER_PR_HER2_status %>%
+  filter(is.na(PR)) %>% #17 
+  count()
+
+ER_PR_HER2_status %>%
+  filter(is.na(HER2)) %>% # 59 
+  count()
+
+# Join PSI scores and ER status by Sample ID 
+merged_PSI_ER_PR_HER2 <- left_join(melted_strict,ER_PR_HER2_status, by = "Sample")
+
+```
+
+## Summary Statistics 
+
+```{r}
+# Summary statistics for ER positive vs negative 
+group_by(merged_PSI_ER_PR_HER2, ER) %>%
+  summarise(
+    count = n_distinct(Sample),
+    mean = mean(PSI_Score, na.rm = TRUE),
+    sd = sd(PSI_Score, na.rm = TRUE),
+    median = median(PSI_Score, na.rm = TRUE),
+    IQR = IQR(PSI_Score, na.rm = TRUE)
+  )
+
+# Summary statistics for PR positive vs negative 
+group_by(merged_PSI_ER_PR_HER2, PR) %>%
+  summarise(
+    count = n_distinct(Sample),
+    mean = mean(PSI_Score, na.rm = TRUE),
+    sd = sd(PSI_Score, na.rm = TRUE),
+    median = median(PSI_Score, na.rm = TRUE),
+    IQR = IQR(PSI_Score, na.rm = TRUE)
+  )
+
+# Summary statistics for HER2 positive vs negative 
+group_by(merged_PSI_ER_PR_HER2, HER2) %>%
+  summarise(
+    count = n_distinct(Sample),
+    mean = mean(PSI_Score, na.rm = TRUE),
+    sd = sd(PSI_Score, na.rm = TRUE),
+    median = median(PSI_Score, na.rm = TRUE),
+    IQR = IQR(PSI_Score, na.rm = TRUE)
+  )
+  
+# Make boxplots 
+merged_PSI_ER_PR_HER2 %>%
+  na.omit() %>%
+  group_by(ER) %>%
+  ggplot(aes(x = ER, y = PSI_Score)) +
+  geom_boxplot() +
+  labs(x = "ER Status",
+       y = "PSI Score",
+       title = "ER Positive vs Negative")
+
+merged_PSI_ER_PR_HER2 %>%
+  na.omit() %>%
+  group_by(PR) %>%
+  ggplot(aes(x = PR, y = PSI_Score)) +
+  geom_boxplot() +
+  labs(x = "PR Status",
+       y = "PSI Score",
+       title = "PR Positive vs Negative")
+
+merged_PSI_ER_PR_HER2 %>%
+  na.omit() %>%
+  group_by(HER2) %>%
+  ggplot(aes(x = HER2, y = PSI_Score)) +
+  geom_boxplot() +
+  labs(x = "HER2 Status",
+       y = "PSI Score",
+       title = "HER2 Positive vs Negative")
+
+```
+
+## Set Up for Mann Whitney Tests
+
+```{r}
+# All unique AS Events to be analyzed (9855)
+unique_locations <- unique(merged_PSI_ER_PR_HER2$Location)
+
+# Initialize an empty dataframe to store events with only 1 observation
+missing_events <- data.frame(event = character(), stringsAsFactors = FALSE)
+
+# Initialize data frames to store results
+ER_mw_results_20plus <- data.frame(Location = character(),
+                                    ER_positive_mean = numeric(),
+                                    ER_negative_mean = numeric(),
+                                    p_value = numeric(),
+                                    stringsAsFactors = FALSE)
+
+ER_mw_results_fewer_than_20 <- data.frame(Location = character(),
+                                          ER_positive_mean = numeric(),
+                                          ER_negative_mean = numeric(),
+                                          p_value = numeric(),
+                                          stringsAsFactors = FALSE)
+
+PR_mw_results_20plus <- data.frame(Location = character(),
+                                    PR_positive_mean = numeric(),
+                                    PR_negative_mean = numeric(),
+                                    p_value = numeric(),
+                                    stringsAsFactors = FALSE)
+
+PR_mw_results_fewer_than_20 <- data.frame(Location = character(),
+                                          PR_positive_mean = numeric(),
+                                          PR_negative_mean = numeric(),
+                                          p_value = numeric(),
+                                          stringsAsFactors = FALSE)
+
+HER2_mw_results_20plus <- data.frame(Location = character(),
+                                    HER2_positive_mean = numeric(),
+                                    HER2_negative_mean = numeric(),
+                                    p_value = numeric(),
+                                    stringsAsFactors = FALSE)
+
+HER2_mw_results_fewer_than_20 <- data.frame(Location = character(),
+                                          HER2_positive_mean = numeric(),
+                                          HER2_negative_mean = numeric(),
+                                          p_value = numeric(),
+                                          stringsAsFactors = FALSE)
+```
+
+## ER Positive vs Negative
+
+```{r}
+# Loop through each unique location and perform Mann-Whitney test
+for (event in unique_locations) {
+  # Filter data for the current event
+  data <- merged_PSI_ER_PR_HER2 %>%
+    filter(Location == event) %>%
+    na.omit()
+  
+  # Check if there is only one observation, skip if true
+  if (nrow(data) <= 1) {
+    missing_events <- rbind(missing_events, data.frame(event = event))
+    next
+  }
+  
+  # Check that there are 2 groups (ER positive and ER negative)
+  if(length(unique(data$ER)) == 2){
+    # Check if each group has at least 20 non-NA samples
+    group_counts <- table(data$ER)
+    if(all(group_counts >= 20)) {
+      # Perform Mann-Whitney test with handling ties
+      mw_test <- wilcox.test(PSI_Score ~ ER, data = data, exact = FALSE)
+      
+      # Calculate means for ER in positive and negative groups
+      ER_positive_mean <- mean(data$PSI_Score[data$ER == "Positive"])  
+      ER_negative_mean <- mean(data$PSI_Score[data$ER == "Negative"])
+      
+      # Write results to data frame
+      result <- data.frame(
+        Location = event,
+        ER_positive_mean = ER_positive_mean,
+        ER_negative_mean = ER_negative_mean,
+        p_value = mw_test$p.value
+      )
+      
+      # Bind current result to the overall results data frame
+      ER_mw_results_20plus <- rbind(ER_mw_results_20plus, result)
+    }
+  }else if (length(unique(data$ER)) == 1) {
+    # Calculate mean PSI score for the single ER value
+    ER_mean <- mean(data$PSI_Score)
+    
+    # Write results to data frame with NA for other columns
+    result <- data.frame(
+      Location = event,
+      ER_positive_mean = ifelse(unique(data$ER) == "Positive", ER_mean, NA),
+      ER_negative_mean = ifelse(unique(data$ER) == "Negative", ER_mean, NA),
+      p_value = NA
+    )
+    
+    # Bind current result to the overall results data frame
+    ER_mw_results_fewer_than_20 <- rbind(ER_mw_results_fewer_than_20, result)
+  }
+}
+
+# Perform Benjamini-Hochberg correction for the ER groups with at least 20 non-NA samples
+ER_mw_results_20plus$q_value <- p.adjust(ER_mw_results_20plus$p_value, method = "BH")
+
+```
+
+## PR Positive vs Negative 
+
+```{r}
+# Loop through each unique location and perform Mann-Whitney test
+for (event in unique_locations) {
+  # Filter data for the current event
+  data <- merged_PSI_ER_PR_HER2 %>%
+    filter(Location == event) %>%
+    na.omit()
+  
+  # Check if there is only one observation, skip if true
+  if (nrow(data) <= 1) {
+    missing_events <- rbind(missing_events, data.frame(event = event))
+    next
+  }
+  
+  # Check that there are 2 groups (PR positive and PR negative)
+  if(length(unique(data$PR)) == 2){
+    # Check if each group has at least 20 non-NA samples
+    group_counts <- table(data$PR)
+    if(all(group_counts >= 20)) {
+      # Perform Mann-Whitney test with handling ties
+      mw_test <- wilcox.test(PSI_Score ~ PR, data = data, exact = FALSE)
+      
+      # Calculate means for PR in positive and negative groups
+      PR_positive_mean <- mean(data$PSI_Score[data$PR == "Positive"])  
+      PR_negative_mean <- mean(data$PSI_Score[data$PR == "Negative"])
+      
+      # Write results to data frame
+      result <- data.frame(
+        Location = event,
+        PR_positive_mean = PR_positive_mean,
+        PR_negative_mean = PR_negative_mean,
+        p_value = mw_test$p.value
+      )
+      
+      # Bind current result to the overall results data frame
+      PR_mw_results_20plus <- rbind(PR_mw_results_20plus, result)
+    }
+  }else if (length(unique(data$PR)) == 1) {
+    # Calculate mean PSI score for the single PR value
+    PR_mean <- mean(data$PSI_Score)
+    
+    # Write results to data frame with NA for other columns
+    result <- data.frame(
+      Location = event,
+      PR_positive_mean = ifelse(unique(data$PR) == "Positive", PR_mean, NA),
+      PR_negative_mean = ifelse(unique(data$PR) == "Negative", PR_mean, NA),
+      p_value = NA
+    )
+    
+    # Bind current result to the overall results data frame
+    PR_mw_results_fewer_than_20 <- rbind(PR_mw_results_fewer_than_20, result)
+  }
+}
+
+# Perform Benjamini-Hochberg correction for the PR groups with at least 20 non-NA samples
+PR_mw_results_20plus$q_value <- p.adjust(PR_mw_results_20plus$p_value, method = "BH")
+
+```
+
+## HER2 Positive vs Negative
+
+```{r}
+# Loop through each unique location and perform Mann-Whitney test
+for (event in unique_locations) {
+  # Filter data for the current event
+  data <- merged_PSI_ER_PR_HER2 %>%
+    filter(Location == event) %>%
+    na.omit()
+  
+  # Check if there is only one observation, skip if true
+  if (nrow(data) <= 1) {
+    missing_events <- rbind(missing_events, data.frame(event = event))
+    next
+  }
+  
+  # Check that there are 2 groups (HER2 positive and HER2 negative)
+  if(length(unique(data$HER2)) == 2){
+    # Check if each group has at least 20 non-NA samples
+    group_counts <- table(data$HER2)
+    if(all(group_counts >= 20)) {
+      # Perform Mann-Whitney test with handling ties
+      mw_test <- wilcox.test(PSI_Score ~ HER2, data = data, exact = FALSE)
+      
+      # Calculate means for HER2 in positive and negative groups
+      HER2_positive_mean <- mean(data$PSI_Score[data$HER2 == "Positive"])  
+      HER2_negative_mean <- mean(data$PSI_Score[data$HER2 == "Negative"])
+      
+      # Write results to data frame
+      result <- data.frame(
+        Location = event,
+        HER2_positive_mean = HER2_positive_mean,
+        HER2_negative_mean = HER2_negative_mean,
+        p_value = mw_test$p.value
+      )
+      
+      # Bind current result to the overall results data frame
+      HER2_mw_results_20plus <- rbind(HER2_mw_results_20plus, result)
+    }
+  }else if (length(unique(data$HER2)) == 1) {
+    # Calculate mean PSI score for the single HER2 value
+    HER2_mean <- mean(data$PSI_Score)
+    
+    # Write results to data frame with NA for other columns
+    result <- data.frame(
+      Location = event,
+      HER2_positive_mean = ifelse(unique(data$HER2) == "Positive", HER2_mean, NA),
+      HER2_negative_mean = ifelse(unique(data$HER2) == "Negative", HER2_mean, NA),
+      p_value = NA
+    )
+    
+    # Bind current result to the overall results data frame
+    HER2_mw_results_fewer_than_20 <- rbind(HER2_mw_results_fewer_than_20, result)
+  }
+}
+
+# Perform Benjamini-Hochberg correction for the ER groups with at least 20 non-NA samples
+HER2_mw_results_20plus$q_value <- p.adjust(HER2_mw_results_20plus$p_value, method = "BH")
+
+```
+
+## Summary of Mann-Whitney Tests
+
+```{r}
+# Check how many events have significant differential splicing 
+ER_mw_results_20plus %>%
+  filter(q_value < 0.05) %>%
+  count() #3908 -> 1587
+
+PR_mw_results_20plus %>%
+  filter(q_value < 0.05) %>%
+  count() #5556 -> 1150
+
+HER2_mw_results_20plus %>%
+  filter(q_value < 0.05) %>%
+  count() #3652 -> 666
+
+# Add gene names 
+ER_mw_gene_results <- left_join(ER_mw_results_20plus, gene_names, by = "Location")
+PR_mw_gene_results <- left_join(PR_mw_results_20plus, gene_names, by = "Location")
+HER2_mw_gene_results <- left_join(HER2_mw_results_20plus, gene_names, by = "Location")
+
+# Check how many genes have differential splicing events 
+ER_mw_gene_results %>%
+  #filter(q_value < 0.05) %>%
+  group_by(Gene_Name) %>%
+  count() #378 -> 309
+
+PR_mw_gene_results %>%
+  #filter(q_value < 0.05) %>%
+  group_by(Gene_Name) %>%
+  count() #389 -> 261
+
+HER2_mw_gene_results %>%
+  #filter(q_value < 0.05) %>%
+  group_by(Gene_Name) %>%
+  count() #374 -> 188
+
+```
+
+## Kruskal-Wallis Test: Molecular Subtypes
+
+```{r}
+# Generate summary statistics 
+KW_summary_stats <- group_by(merged_PSI_ER_PR_HER2, NCN_PAM50) %>%
+  summarise(
+    count = n_distinct(Sample),
+    mean = mean(PSI_Score, na.rm = TRUE),
+    sd = sd(PSI_Score, na.rm = TRUE),
+    median = median(PSI_Score, na.rm = TRUE),
+    IQR = IQR(PSI_Score, na.rm = TRUE)
+  )
+
+# Initialize dataframe to store results 
+KW_results <- data.frame(
+  Location = character(),
+  LumA_mean = double(),
+  LumB_mean = double(),
+  Basal_mean = double(),
+  HER2_mean = double(),
+  Normal_mean = double(),
+  p_value = double(),
+  q_value = double(),
+  stringsAsFactors = FALSE
+)
+
+# Initialize an empty dataframe to store events with only 1 observation
+missing_events_kw <- data.frame(event = character(), stringsAsFactors = FALSE)
+
+# Store events that do not have samples from all 5 subtypes 
+missing_unique_groups <- data.frame()
+
+# Store events with all 5 subtypes but <20 samples per group
+insufficient_samples <- data.frame()
+
+# Loop through each unique location
+for (event in unique_locations) {
+  # Filter data for the current event
+  data <- merged_PSI_ER_PR_HER2 %>%
+    na.omit() %>%
+    filter(Location == event) %>%
+    # Exclude samples with unclassified subtype 
+    filter(NCN_PAM50 != "unclassified")
+  
+  # Check if there is only one observation, skip if true
+  if (nrow(data) <= 1) {
+    missing_events_kw <- rbind(missing_events_kw, data.frame(event = event))
+    next
+  }
+  
+  # Check if there are exactly 5 unique groups
+  if (length(unique(data$NCN_PAM50)) == 5) {
+    # Check if each group has at least 20 non-NA samples
+    group_counts <- table(data$NCN_PAM50)
+    if (all(group_counts >= 20)) {
+      # Perform Kruskal-Wallis test with handling ties
+      data$NCN_PAM50 <- as.factor(data$NCN_PAM50) 
+      data$PSI_Score <- as.numeric(data$PSI_Score)
+      k_test <- kruskal.test(PSI_Score ~ NCN_PAM50, data = data)
+      
+      # Calculate means for each group
+      LumA_mean <- mean(data$PSI_Score[data$NCN_PAM50 == "LumA"])  
+      LumB_mean <- mean(data$PSI_Score[data$NCN_PAM50 == "LumB"])  
+      Basal_mean <- mean(data$PSI_Score[data$NCN_PAM50 == "Basal"])  
+      HER2_mean <- mean(data$PSI_Score[data$NCN_PAM50 == "Her2"])  
+      Normal_mean <- mean(data$PSI_Score[data$NCN_PAM50 == "Normal"])  
+      
+      # Prepare results to store in data frame
+      result <- data.frame(
+        Location = event,
+        LumA_mean = LumA_mean,
+        LumB_mean = LumB_mean,
+        Basal_mean = Basal_mean,
+        HER2_mean = HER2_mean,
+        Normal_mean = Normal_mean,
+        p_value = k_test$p.value,
+        stringsAsFactors = FALSE
+      )
+      
+      # Bind current results to the data frame
+      KW_results <- rbind(KW_results, result)
+    } else {
+      # Events with all 5 subtypes but <20 samples per group 
+      insufficient_samples <- rbind(insufficient_samples, data.frame(event = event))
+    }
+  } else {
+    # Events that do not have samples from all 5 subtypes
+    missing_unique_groups <- rbind(missing_unique_groups, data.frame(event = event))
+  }
+}
+
+# Perform Benjamini-Hochberg correction (decrease FDR)
+KW_results$q_value <- p.adjust(KW_results$p_value, method = "BH")
+
+# Add gene names 
+KW_with_genes <- left_join(KW_results, gene_names, by = "Location")
+
+```
+
+## Closer look at significant results
+
+```{r}
+KW_with_genes %>%
+  filter(q_value < 0.05) %>%
+  group_by(Gene_Name) %>%
+  count() #345 genes -> 316
+
+KW_with_genes %>%
+  filter(q_value < 0.05) %>%
+  count() #2333 events -> 1579
+
+# Subset significant results
+significant_results <- subset(KW_with_genes, q_value < 0.05)
+mean_diff <- significant_results %>%
+  summarise(
+    LumA_LumB = LumA_mean - LumB_mean,
+    LumA_Basal = LumA_mean - Basal_mean,
+    LumA_HER2 = LumA_mean - HER2_mean,
+    LumA_Normal = LumA_mean - Normal_mean,
+    LumB_Basal = LumB_mean - Basal_mean,
+    LumB_HER2 = LumB_mean - HER2_mean,
+    LumB_Normal = LumB_mean - Normal_mean,
+    Basal_HER2 = Basal_mean - HER2_mean,
+    Basal_Normal = Basal_mean - Normal_mean,
+    HER2_Normal = HER2_mean - Normal_mean,
+  )
+
+# Create a histogram of delta mean
+
+install.packages("geomtextpath")
+library(geomtextpath)
+library(hrbrthemes)
+
+# Plot histograms
+mean_diff$labels = ifelse(mean_diff$Basal_HER2 <0, "<", ">")
+ggplot(mean_diff, aes(x = Basal_HER2, colour = as.factor(labels), label = as.factor(labels))) +
+  geom_textdensity() +
+  xlim(c(-0.2, 0.2)) +
+  theme_bw() 
+
+
+# Look at AS Type 
+event_types <- AS_events %>%
+  select(Location, AS_Type)
+
+significant_results <- left_join(significant_results, event_types, by = "Location")
+
+significant_results %>%
+  group_by(AS_Type) %>%
+  count()
+```
