@@ -1,5 +1,9 @@
+# title: "1_Crosscheck"
+# date: "2024-04-08"
+# description: ADD 
+
 # Load list of 743 genes known to be involved in cancer
-CGC_genes <- read.table("~/Desktop/Academics/Spring_24/BINP37/1_Crosschecking/all_CGC_genenames.txt", header = FALSE)
+CGC_genes <- read.table("~/Desktop/Academics/Spring_24/BINP37/Raw_Data/all_CGC_genenames.txt", header = FALSE)
 
 # Some of the gene symbols have been updated in GeneCards 
 CGC_genes[90,] <- "CARS1" #CARS
@@ -13,13 +17,13 @@ CGC_genes[604,] <- "SEPTIN6" #SEPT6
 CGC_genes[605,] <- "SEPTIN9" #SEPT9 
 
 # Load list of known variants 
-all_variants <- read.table("~/Desktop/Academics/Spring_24/BINP37/1_Crosschecking/all_genes_variantexplo.txt", header = FALSE)
+all_variants <- read.table("~/Desktop/Academics/Spring_24/BINP37/Raw_Data/all_genes_variantexplo.txt", header = FALSE)
 
 # Load list of genes to be analyzed based on Mirjam's pipeline
-analyze_genes <- read.table("~/Desktop/Academics/Spring_24/BINP37/1_Crosschecking/annotated_genes.txt", header = FALSE)
+analyze_genes <- read.table("~/Desktop/Academics/Spring_24/BINP37/Raw_Data/annotated_genes.txt", header = FALSE)
 
 # Load list of genes annotated by GENCODE and/or NCBI
-annotations <- read.table("~/Desktop/Academics/Spring_24/BINP37/1_Crosschecking/all_Gen_NCBI.txt", header = FALSE)
+annotations <- read.table("~/Desktop/Academics/Spring_24/BINP37/Raw_Data/all_Gen_NCBI.txt", header = FALSE)
 
 # Convert to vectors 
 CGC_genes_v <- CGC_genes$V1
@@ -36,7 +40,7 @@ CGC_not_variant <- annotated_CGC_genes[!(annotated_CGC_genes %in% all_variants_v
 
 # Identify genes that are expressed in breast tumors 
 # Remove FPKM scores lower than 10 before comparing gene names:
-fpkm_table <- read.table("~/Desktop/Academics/Spring_24/BINP37/1_Crosschecking/Raw_Tables/fpkm_table.tsv", header = TRUE)
+fpkm_table <- read.table("~/Desktop/Academics/Spring_24/BINP37/Raw_Data/Raw_Tables/fpkm_table.tsv", header = TRUE)
 fpkm_melted <- fpkm_table %>%
   melt(id.vars = "Location", variable.name = "Sample", value.name = "FPKM") %>%
   filter(FPKM > 10) # based on Mirjam's analysis 
