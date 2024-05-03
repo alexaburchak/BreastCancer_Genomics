@@ -1,6 +1,12 @@
+# title: "4_Heatmaps"
+# date: "2024-04-08"
+# description: ADD 
+
+# Load necessary packages  
 library(RColorBrewer)
 library(ComplexHeatmap)
 library(colorRamp2)
+
 ## Start by making a simple heatmap of ER pos vs neg: 
 {
   # Determine which events/genes show differential expression
@@ -82,10 +88,10 @@ library(colorRamp2)
   # Convert PSI scores to matrix 
   heatmap_matrix_KW <- as.matrix(KW_events_for_heatmap[, 4:3457])
   row.names(heatmap_matrix_KW) <- unlist(KW_events_for_heatmap[,1])
-  heatmap_matrix_KW <- t(heatmap_matrix_KW)
+  flip_heatmap_matrix_KW <- t(heatmap_matrix_KW)
   
   # Create heatmap
-  heatmap(heatmap_matrix_KW, main = "All Subtypes", col= colorRampPalette(brewer.pal(8, "Blues"))(25)) # add scale
+  heatmap(flip_heatmap_matrix_KW, main = "All Subtypes", col= colorRampPalette(brewer.pal(8, "Blues"))(25)) # add scale
 }
 
 ## Complex heatmap of all significant results (by subtype): 
@@ -112,7 +118,7 @@ library(colorRamp2)
           cluster_rows = FALSE, 
           cluster_columns = TRUE,
           show_row_names = TRUE, 
-          row_names_gp = gpar(fontsize = 8), 
+          row_names_gp = gpar(fontsize = 7), 
           column_names_gp = gpar(fontsize = 6), 
           row_names_side = "left", 
           show_column_names = FALSE, 
@@ -165,7 +171,7 @@ library(colorRamp2)
 ## Group by Event Type   
 {
   # Cassette Exons 
-  CE_heatmap_events <- diff_KW_events_for_heatmap %>% # 301 events 
+  CE_heatmap_events <- diff_KW_events_for_heatmap %>% # 460 events 
     filter(AS_Type == "CE")
   # Convert PSI scores to matrix 
   CE_heatmap_matrix <- as.matrix(CE_heatmap_events[, 4:3457])
@@ -184,7 +190,7 @@ library(colorRamp2)
           bottom_annotation = annotationTracks)
   
   # Intron Retention 
-  IR_heatmap_events <- diff_KW_events_for_heatmap %>% # 301 events 
+  IR_heatmap_events <- diff_KW_events_for_heatmap %>% # 69 events 
     filter(AS_Type == "IR")
   # Convert PSI scores to matrix 
   IR_heatmap_matrix <- as.matrix(IR_heatmap_events[, 4:3457])
@@ -203,7 +209,7 @@ library(colorRamp2)
           bottom_annotation = annotationTracks)
   
   # Alternative Acceptors & Donors 
-  DA_heatmap_events <- diff_KW_events_for_heatmap %>% # 301 events 
+  DA_heatmap_events <- diff_KW_events_for_heatmap %>% # 260 events 
     filter(AS_Type == "AA" | AS_Type == "AD")
   # Convert PSI scores to matrix 
   DA_heatmap_matrix <- as.matrix(DA_heatmap_events[, 4:3457])
@@ -220,7 +226,116 @@ library(colorRamp2)
           column_title_gp = gpar(fontsize = 8), 
           col = colorRamp2(c(0, .5, 1), hcl_palette = "Blues", rev = TRUE), 
           bottom_annotation = annotationTracks)
+  
+  # Alternative Acceptors 
+  AA_heatmap_events <- diff_KW_events_for_heatmap %>% # 126 events 
+    filter(AS_Type == "AA")
+  # Convert PSI scores to matrix 
+  AA_heatmap_matrix <- as.matrix(AA_heatmap_events[, 4:3457])
+  row.names(AA_heatmap_matrix) <- unlist(AA_heatmap_events[,1])
+  
+  Heatmap(AA_heatmap_matrix, name = "PSI",  
+          cluster_rows = FALSE, 
+          cluster_columns = TRUE,
+          show_row_names = TRUE, 
+          row_names_gp = gpar(fontsize = 4), 
+          column_names_gp = gpar(fontsize = 6), 
+          row_names_side = "left", 
+          show_column_names = FALSE, 
+          column_title_gp = gpar(fontsize = 8), 
+          col = colorRamp2(c(0, .5, 1), hcl_palette = "Blues", rev = TRUE), 
+          bottom_annotation = annotationTracks)
+  
+  # Alternative Donors 
+  AD_heatmap_events <- diff_KW_events_for_heatmap %>% # 134 events 
+    filter(AS_Type == "AD")
+  # Convert PSI scores to matrix 
+  AD_heatmap_matrix <- as.matrix(AD_heatmap_events[, 4:3457])
+  row.names(AD_heatmap_matrix) <- unlist(AD_heatmap_events[,1])
+  
+  Heatmap(AD_heatmap_matrix, name = "PSI",  
+          cluster_rows = FALSE, 
+          cluster_columns = TRUE,
+          show_row_names = TRUE, 
+          row_names_gp = gpar(fontsize = 4), 
+          column_names_gp = gpar(fontsize = 6), 
+          row_names_side = "left", 
+          show_column_names = FALSE, 
+          column_title_gp = gpar(fontsize = 8), 
+          col = colorRamp2(c(0, .5, 1), hcl_palette = "Blues", rev = TRUE), 
+          bottom_annotation = annotationTracks)
 }
 
-
-
+# Breakdown of CE dataset
+{
+  # Divide into 4 datasets  
+  CE_heatmap_1 <- CE_heatmap_events[1:115,]
+  CE_heatmap_2 <- CE_heatmap_events[116:230,]
+  CE_heatmap_3 <- CE_heatmap_events[231:345,]
+  CE_heatmap_4 <- CE_heatmap_events[346:460,]
+  
+  # Convert sets to matrices 
+  CE_heatmap_mat1 <- as.matrix(CE_heatmap_1[, 4:3457])
+  row.names(CE_heatmap_mat1) <- unlist(CE_heatmap_1[,1])
+  
+  CE_heatmap_mat2 <- as.matrix(CE_heatmap_2[, 4:3457])
+  row.names(CE_heatmap_mat2) <- unlist(CE_heatmap_2[,1])
+  
+  CE_heatmap_mat3 <- as.matrix(CE_heatmap_3[, 4:3457])
+  row.names(CE_heatmap_mat3) <- unlist(CE_heatmap_3[,1])
+  
+  CE_heatmap_mat4 <- as.matrix(CE_heatmap_4[, 4:3457])
+  row.names(CE_heatmap_mat4) <- unlist(CE_heatmap_4[,1])
+  
+  # Set 1
+  Heatmap(CE_heatmap_mat1, name = "PSI",  
+          cluster_rows = FALSE, 
+          cluster_columns = TRUE,
+          show_row_names = TRUE, 
+          row_names_gp = gpar(fontsize = 6), 
+          column_names_gp = gpar(fontsize = 6), 
+          row_names_side = "left", 
+          show_column_names = FALSE, 
+          column_title_gp = gpar(fontsize = 8), 
+          col = colorRamp2(c(0, .5, 1), hcl_palette = "Blues", rev = TRUE), 
+          bottom_annotation = annotationTracks)
+  
+  # Set 2
+  Heatmap(CE_heatmap_mat2, name = "PSI",  
+          cluster_rows = FALSE, 
+          cluster_columns = TRUE,
+          show_row_names = TRUE, 
+          row_names_gp = gpar(fontsize = 6), 
+          column_names_gp = gpar(fontsize = 6), 
+          row_names_side = "left", 
+          show_column_names = FALSE, 
+          column_title_gp = gpar(fontsize = 8), 
+          col = colorRamp2(c(0, .5, 1), hcl_palette = "Blues", rev = TRUE), 
+          bottom_annotation = annotationTracks)
+  
+  # Set 3
+  Heatmap(CE_heatmap_mat3, name = "PSI",  
+          cluster_rows = FALSE, 
+          cluster_columns = TRUE,
+          show_row_names = TRUE, 
+          row_names_gp = gpar(fontsize = 6), 
+          column_names_gp = gpar(fontsize = 6), 
+          row_names_side = "left", 
+          show_column_names = FALSE, 
+          column_title_gp = gpar(fontsize = 8), 
+          col = colorRamp2(c(0, .5, 1), hcl_palette = "Blues", rev = TRUE), 
+          bottom_annotation = annotationTracks)
+  
+  # Set 4
+  Heatmap(CE_heatmap_mat4, name = "PSI",  
+          cluster_rows = FALSE, 
+          cluster_columns = TRUE,
+          show_row_names = TRUE, 
+          row_names_gp = gpar(fontsize = 6), 
+          column_names_gp = gpar(fontsize = 6), 
+          row_names_side = "left", 
+          show_column_names = FALSE, 
+          column_title_gp = gpar(fontsize = 8), 
+          col = colorRamp2(c(0, .5, 1), hcl_palette = "Blues", rev = TRUE), 
+          bottom_annotation = annotationTracks)
+}
