@@ -1,19 +1,13 @@
 ---
 title: "2_SummaryStats"
-output: pdf_document
 date: "2024-04-03"
-description: Use this Rscript to load tables with information on known alternative splicing events and percent spliced in (PSI) scores from each event for all 3,455 tumor samples. Once loaded, all non-numeric PSI scores are converted to NA and removed before mean PSI scores are calculated for each AS event. Since all exons are treated as cassette exons and all introns as intron retentions, there will be cases where we have a PSI score of 0 or 1, so we remove these events as they are not likely to be abnormal alternative splicing events. The distribution of the remaining mean PSI scores is visualized as both a frequency polygon and a histogram. Finally, a summary of crucial tumor data, including information on molecular subtype, ER and PR status is generated based on patient data obtained from the SCAN-B project. 
+description: Use this Rscript to load tables with information on known alternative splicing events and percent spliced in (PSI) scores from each event for all 3,454 tumor samples. Once loaded, all non-numeric PSI scores are converted to NA and removed before mean PSI scores are calculated for each AS event. Since all exons are treated as cassette exons and all introns as intron retentions, there will be cases where we have a PSI score of 0 or 1, so we remove these events as they are not likely to be abnormal alternative splicing events. The distribution of the remaining mean PSI scores is visualized as both a frequency polygon and a histogram. Finally, a summary of crucial tumor data, including information on molecular subtype, ER and PR status is generated based on patient data obtained from the SCAN-B project. 
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-# Install necessary packages 
-#install.packages("data.table")
-#install.packages("tidyr")
-#install.packages("reshape2")
-#install.packages("readxl")
-#install.packages("hrbrthemes")
+# Load necessary packages 
 library(reshape2)
 library(data.table)
 library(dplyr)
@@ -37,8 +31,8 @@ data_list_AS <- lapply(file_list_AS, function(file) {
 AS_events <- do.call(rbind, data_list_AS)
 
 # Count number of splicing events  
-AS_events %>%
-  group_by(AS_Type) %>%
+genes_for_analysis<- AS_events %>%
+  group_by(Gene_Name) %>%
   count()
 ```
 
@@ -112,7 +106,7 @@ gene_names <- AS_events %>%
 PSI_scores <- left_join(gene_names, PSI_scores, by = "Location")
 
 PSI_scores %>%
-  group_by(Gene_Name) %>%
+  group_by(Location) %>%
   count() #486 genes 
 
 ```
@@ -135,7 +129,6 @@ PSI_mean_scores <- PSI_scores %>%
 
 # Remove scores of 0 and 1 
 # We treat every exon as a cassette exon and every intron as intron retention
-# this leaves us with 16062 events from 482 genes 
 PSI_strict <- PSI_mean_scores %>%
   filter(mean != 0) %>%
   filter(mean != 1) 
@@ -193,9 +186,6 @@ PSI_mean_scores %>%
        y = "Frequency",
        title = "Distribution of Mean PSI Scores")
 
-# Save plot 1 as PDF
-ggsave("CEvIR_distribution.pdf", plot = plot1, device = "pdf")
-
 # Plot 2
 plot2 <- PSI_strict %>%
   filter(AS_Type == "AA" | AS_Type == "AD") %>%
@@ -221,9 +211,6 @@ PSI_mean_scores %>%
        x = "Mean PSI Score",
        y = "Frequency",
        title = "Distribution of Mean PSI Scores")
-
-# Save plot 2 as PDF
-ggsave("AAvAD_distribution.pdf", plot = plot2, device = "pdf")
 
 ```
 
@@ -265,10 +252,5 @@ filtered_patient_data %>%
 # Molecular Subtypes 
 filtered_patient_data %>%
   group_by(NCN.PAM50) %>%
-  count()
-
-# Patient age 
-filtered_patient_data %>%
-  group_by(`Age (5-year range, e.g., 35(31-35), 40(36-40), 45(41-45) etc.)`) %>%
   count()
 ```

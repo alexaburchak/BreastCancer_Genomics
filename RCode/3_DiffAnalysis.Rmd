@@ -1,16 +1,13 @@
 ---
 title: "3_DiffAnalysis"
-output: pdf_document
 date: "2024-04-08"
-description: ADD 
+description: This script analyzes Percent Spliced In (PSI) variation among samples to investigate differential splicing events in relation to ER, PR, and HER2 status, as well as molecular subtypes in breast cancer. Mann-Whitney U tests are conducted to compare PSI scores between ER, PR, and HER2 positive and negative groups. A Kruskal-Wallis test is used to assess PSI score differences across molecular subtypes. Benjamini-Hochberg correction is applied to control the false discovery rate. Summary statistics are generated, and significant results are highlighted, focusing on splicing events that show differential expression among the defined groups.
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
 # Install necessary packages
-install.packages("data.table")
-install.packages("dplyr")
 library(data.table)
 library(dplyr)
 ```
@@ -117,41 +114,13 @@ group_by(merged_PSI_ER_PR_HER2, HER2) %>%
     median = median(PSI_Score, na.rm = TRUE),
     IQR = IQR(PSI_Score, na.rm = TRUE)
   )
-  
-# Make boxplots 
-merged_PSI_ER_PR_HER2 %>%
-  na.omit() %>%
-  group_by(ER) %>%
-  ggplot(aes(x = ER, y = PSI_Score)) +
-  geom_boxplot() +
-  labs(x = "ER Status",
-       y = "PSI Score",
-       title = "ER Positive vs Negative")
-
-merged_PSI_ER_PR_HER2 %>%
-  na.omit() %>%
-  group_by(PR) %>%
-  ggplot(aes(x = PR, y = PSI_Score)) +
-  geom_boxplot() +
-  labs(x = "PR Status",
-       y = "PSI Score",
-       title = "PR Positive vs Negative")
-
-merged_PSI_ER_PR_HER2 %>%
-  na.omit() %>%
-  group_by(HER2) %>%
-  ggplot(aes(x = HER2, y = PSI_Score)) +
-  geom_boxplot() +
-  labs(x = "HER2 Status",
-       y = "PSI Score",
-       title = "HER2 Positive vs Negative")
 
 ```
 
 ## Set Up for Mann Whitney Tests
 
 ```{r}
-# All unique AS Events to be analyzed (9855)
+# All unique AS Events to be analyzed (11,742)
 unique_locations <- unique(merged_PSI_ER_PR_HER2$Location)
 
 # Initialize an empty dataframe to store events with only 1 observation
@@ -384,15 +353,15 @@ HER2_mw_results_20plus$q_value <- p.adjust(HER2_mw_results_20plus$p_value, metho
 # Check how many events have significant differential splicing 
 ER_mw_results_20plus %>%
   filter(q_value < 0.05) %>%
-  count() #3908 -> 1587
+  count() 
 
 PR_mw_results_20plus %>%
   filter(q_value < 0.05) %>%
-  count() #5556 -> 1150
+  count() 
 
 HER2_mw_results_20plus %>%
   filter(q_value < 0.05) %>%
-  count() #3652 -> 666
+  count() 
 
 # Add gene names 
 ER_mw_gene_results <- left_join(ER_mw_results_20plus, gene_names, by = "Location")
@@ -403,17 +372,17 @@ HER2_mw_gene_results <- left_join(HER2_mw_results_20plus, gene_names, by = "Loca
 ER_mw_gene_results %>%
   #filter(q_value < 0.05) %>%
   group_by(Gene_Name) %>%
-  count() #378 -> 309
+  count() 
 
 PR_mw_gene_results %>%
   #filter(q_value < 0.05) %>%
   group_by(Gene_Name) %>%
-  count() #389 -> 261
+  count() 
 
 HER2_mw_gene_results %>%
   #filter(q_value < 0.05) %>%
   group_by(Gene_Name) %>%
-  count() #374 -> 188
+  count() 
 
 ```
 
@@ -522,11 +491,11 @@ KW_with_genes <- left_join(KW_results, gene_names, by = "Location")
 KW_with_genes %>%
   filter(q_value < 0.05) %>%
   group_by(Gene_Name) %>%
-  count() #345 genes -> 316
+  count() 
 
 KW_with_genes %>%
   filter(q_value < 0.05) %>%
-  count() #2333 events -> 1579
+  count() 
 
 # Subset significant results
 significant_results <- subset(KW_with_genes, q_value < 0.05)
@@ -545,7 +514,6 @@ mean_diff <- significant_results %>%
   )
 
 # Create a histogram of delta mean
-
 install.packages("geomtextpath")
 library(geomtextpath)
 library(hrbrthemes)
@@ -556,7 +524,6 @@ ggplot(mean_diff, aes(x = Basal_HER2, colour = as.factor(labels), label = as.fac
   geom_textdensity() +
   xlim(c(-0.2, 0.2)) +
   theme_bw() 
-
 
 # Look at AS Type 
 event_types <- AS_events %>%
