@@ -3,9 +3,14 @@
 Need to write an overview of what the scripts do, maybe numbered steps? 
 
 **Requirements**
-Need to write something here about where the data is from. 
+
+The clinical data, including information on receptor status and PAM50 subtype, comes from the SCAN-B 
+cohort. Gene annotations were downloaded from GENCODE (insert link) and RefSeq (insert link). 
+Information on alternative splicing events and PSI scores for each event were provided by 
+Mirjam Müller.  
 
 All code was generated in R Studio (v4.3.2 or higher) using the following packages:
+
 1_Crosscheck
 ```
 install.packages(c("dplyr", "ggplot2", "data.table"))
@@ -61,3 +66,8 @@ in mean PSI scores are minimal even in significant events, our final heatmaps fo
 generated using a cutoff of 10% difference in mean score across groups. 
 
 ### 5_Boxplots 
+Our heatmap of cassette exon events with significant differential splicing across PAM50 subtypes 
+revealed one particularly interesting cluster of events that occur in tenascin c. We further study
+these events by first creating a boxplot of log2-transformed FPKM values for the TNC gene across 
+different PAM50 subtypes. We also generate a boxplot of PSI scores for the 6 specific alternative 
+splicing events of the TNC gene, highlighting variation in alternative splicing across subtypes. 
