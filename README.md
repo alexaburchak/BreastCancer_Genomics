@@ -2,32 +2,34 @@
 ## Overview
 Need to write an overview of what the scripts do, maybe numbered steps? 
 
-**Abbreviations** 
-AS = Alternative Splicing
-PSI = Percent Spliced In
-CE = Casette Exon
-IR = Intron Retention
-AD = Alternative Donor
-AA = Alternative Acceptor
-
 **Requirements**
 Need to write something here about where the data is from. 
 
 All code was generated in R Studio (v4.3.2 or higher) using the following packages:
 1_Crosscheck
+```
 install.packages(c("dplyr", "ggplot2", "data.table"))
+```
 
 2_SummaryStats
+```
 install.packages(c("dplyr", "ggplot2", "data.table", "reshape2", "tidyr", "readxl", "hrbrthemes"))
+```
 
 3_DiffAnalysis
+```
 install.packages(c("geomtextpath", "dplyr", "ggplot2", "data.table", "hrbrthemes"))
+```
 
 4_Heatmaps
+```
 install.packages(c("dplyr", "RColorBrewer", "ComplexHeatmap", "colorRamp2"))
+```
 
 5_Boxplots
+```
 install.packages(c("dplyr", "ggplot2", "tidyr", "stringr")) 
+```
 
 ## Contents 
 ### 1_Crosscheck
