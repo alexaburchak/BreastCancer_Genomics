@@ -1,15 +1,24 @@
 # Investigating Differential Splicing Patterns in Breast Cancer Tumors
 ## Overview
-Need to write an overview of what the scripts do, maybe numbered steps? 
+This reporsitory contains several R scripts necessary for the analysis and visualization of 
+differential alternative splicing in 3454 breast tumor samples from the SCAN-B cohort. 
+
+
+This set of R scripts will perform the following steps:
+1. Identify genes for analysis
+2. Calculate and visualize summary statistics
+3. Perform differential splicing analysis 
+4. Generate heatmaps for significant events
+5. Create boxplots for notable events in *tenascin c*   
 
 **Requirements**
 
-The clinical data, including information on receptor status and PAM50 subtype, comes from the SCAN-B 
-cohort. Gene annotations were downloaded from GENCODE (insert link) and RefSeq (insert link). 
-Information on alternative splicing events and PSI scores for each event were provided by 
-Mirjam Müller.  
+The clinical data, including information on receptor status and PAM50 subtype, comes from the Sweden
+Cancerome Analysis Network- Breast database. Information on alternative splicing events and PSI 
+scores for each event were provided by [Mirjam Müller](https://github.com/TheOrangeBraincell/variants_in_AS_Pipeline) 
+along with instructions for how to download gene annotations from GENCODE and RefSeq.  
 
-All code was generated in R Studio (v4.3.2 or higher) using the following packages:
+All code was run in R Studio (v4.3.2 or higher) using the following packages:
 
 1_Crosscheck
 ```
@@ -67,7 +76,18 @@ generated using a cutoff of 10% difference in mean score across groups.
 
 ### 5_Boxplots 
 Our heatmap of cassette exon events with significant differential splicing across PAM50 subtypes 
-revealed one particularly interesting cluster of events that occur in tenascin c. We further study
-these events by first creating a boxplot of log2-transformed FPKM values for the TNC gene across 
+revealed one particularly interesting cluster of events that occur in *tenascin c*, a gene known for its role in cell proliferation and migration. We further study
+these events by first creating a boxplot of log2-transformed FPKM values for *tnc*  across 
 different PAM50 subtypes. We also generate a boxplot of PSI scores for the 6 specific alternative 
-splicing events of the TNC gene, highlighting variation in alternative splicing across subtypes. 
+splicing events within *tnc*, highlighting variation in alternative splicing across subtypes. 
+
+## Usage
+Each script can be run sequentially to reproduce the analysis. Ensure that all dependencies, 
+including the complexHeatmap package, are installed and that the necessary input data is available. 
+Detailed comments within each script provide guidance on execution and interpretation of results.
+
+
+
+
+
+
