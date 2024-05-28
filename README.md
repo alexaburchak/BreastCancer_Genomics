@@ -1,6 +1,6 @@
 # Investigating Differential Splicing Patterns in Breast Cancer Tumors
 ## Overview
-This reporsitory contains several R scripts necessary for the analysis and visualization of 
+This repository contains several R scripts necessary for the analysis and visualization of 
 differential alternative splicing in 3454 breast tumor samples from the SCAN-B cohort. 
 
 
@@ -77,9 +77,9 @@ generated using a cutoff of 10% difference in mean score across groups.
 ### 5_Boxplots 
 Our heatmap of cassette exon events with significant differential splicing across PAM50 subtypes 
 revealed one particularly interesting cluster of events that occur in *tenascin c*, a gene known for its role in cell proliferation and migration. We further study
-these events by first creating a boxplot of log2-transformed FPKM values for *tnc*  across 
+these events by first creating a boxplot of log2-transformed FPKM values for *TNC*  across 
 different PAM50 subtypes. We also generate a boxplot of PSI scores for the 6 specific alternative 
-splicing events within *tnc*, highlighting variation in alternative splicing across subtypes. 
+splicing events within *TNC*, highlighting variation in alternative splicing across subtypes. 
 
 ## Usage
 Each script can be run sequentially to reproduce the analysis. Ensure that all dependencies, 
